@@ -43,6 +43,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field as PydanticField, create_model
 
+from cellkit._sentry import capture
 from cellkit.auth import Principal, TokenVerifier, Unauthenticated
 from cellkit.platform import Action, Denied, Platform, PlatformUnavailable
 from cellkit.publisher import publish_pending
@@ -269,7 +270,8 @@ def create_app(cell: Cell, connect: Callable[[], psycopg.Connection], verifier: 
         try:
             platform.finish(caller.token, caller.channel, execution,
                             {"status": "succeeded", "service": cell.name, **plan.audit})
-        except (PlatformUnavailable, Denied):
+        except (PlatformUnavailable, Denied) as exc:
+            capture(exc)  # the write succeeded; only the audit finish failed
             log.warning(json.dumps({"event": f"{cell.name}.finish_failed", "execution": str(execution)}))
         log.info(json.dumps({"event": f"{cell.name}.write", "action": plan.permission, "execution": str(execution),
                              "actor": str(caller.actor), "workspace": str(caller.workspace)}))
@@ -303,6 +305,7 @@ def create_app(cell: Cell, connect: Callable[[], psycopg.Connection], verifier: 
                 with bound(caller) as conn:
                     publish_pending(conn, schema, platform, token, limit=20)
             except Exception as exc:  # the cron sweep retries
+                capture(exc)
                 log.warning(json.dumps({"event": f"{cell.name}.inline_publish_failed", "error": type(exc).__name__}))
 
         background.add_task(run)
