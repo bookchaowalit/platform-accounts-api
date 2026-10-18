@@ -34,6 +34,10 @@ from service_auth import AuthError, AuthPolicy, check_read_auth, is_loopback, re
 
 import yaml
 
+from _sentry import init_sentry
+
+init_sentry()
+
 
 SERVICE_NAME = "solo-empire-accounts-api"
 SCHEMA_VERSION = "solo-empire.accounts.v1"
@@ -288,6 +292,10 @@ class AccountsApi:
         except (OSError, ValueError, TypeError, yaml.YAMLError):
             return Response(503, {"error": {"code": "matrix_unavailable", "message": "Account matrix could not be read"}})
         except Exception:
+            if os.environ.get("SENTRY_DSN", "").strip():  # see _sentry.py
+                import sentry_sdk
+
+                sentry_sdk.capture_exception()
             return Response(500, {"error": {"code": "internal_error", "message": "Accounts service could not complete the request"}})
 
 
