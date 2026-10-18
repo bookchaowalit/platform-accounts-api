@@ -5,7 +5,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 ACCOUNTS_API_HOST=0.0.0.0 ACCOUNTS_API_ENV=production
 WORKDIR /app
 COPY services/accounts-metadata-api/vendor/service-auth /app/vendor/service-auth
-COPY services/accounts-metadata-api/pyproject.toml services/accounts-metadata-api/server.py /app/services/accounts-metadata-api/
+COPY services/accounts-metadata-api/pyproject.toml services/accounts-metadata-api/server.py services/accounts-metadata-api/_sentry.py /app/services/accounts-metadata-api/
 RUN pip install /app/vendor/service-auth /app/services/accounts-metadata-api
 COPY accounts/ACCOUNT-MATRIX.yaml /app/accounts/ACCOUNT-MATRIX.yaml
 
