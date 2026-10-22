@@ -7,8 +7,11 @@ solo-empire `accounts/`); override with `ACCOUNTS_API_MATRIX_PATH`. This service
 accounts cell API in `src/` (Postgres). `vendor/service-auth` is a vendored copy of
 `bookchaowalit/platform-auth-sdk`.
 
-Test: `PYTHONPATH=services/accounts-metadata-api/vendor/service-auth python3 -m unittest discover -s services/accounts-metadata-api/tests -v`
+Test (from this folder, as CI does): `uv sync --frozen --all-extras && .venv/bin/python -m coverage run -m unittest discover -s tests`
 (the test against the real matrix is skipped until `accounts/ACCOUNT-MATRIX.yaml` exists here).
+Dependencies are locked in this folder's `uv.lock` (the vendored `service-auth` is a path source in
+it); the image installs them with `uv sync --frozen`. Change a dependency with `uv add`/`uv lock`
+here and commit the lock.
 
 ---
 
@@ -25,8 +28,8 @@ it and reloads when the file changes.
 From the accounts repository root:
 
 ```bash
-python3 -m pip install ./services/accounts-metadata-api/vendor/service-auth ./services/accounts-metadata-api
-python3 services/accounts-metadata-api/server.py
+uv sync --frozen --project services/accounts-metadata-api   # the vendored service-auth comes with it
+services/accounts-metadata-api/.venv/bin/python services/accounts-metadata-api/server.py
 ```
 
 The default listener is `http://127.0.0.1:3470`. Configure
@@ -56,7 +59,9 @@ The image enforces scoped JWT authorization and binds `0.0.0.0`.
 ## Test
 
 ```bash
-PYTHONPATH=services/accounts-metadata-api/vendor/service-auth python3 -m unittest discover -s services/accounts-metadata-api/tests -v
+cd services/accounts-metadata-api && uv sync --frozen --all-extras
+.venv/bin/python -m coverage run -m unittest discover -s tests -v && .venv/bin/python -m coverage report
+.venv/bin/mypy . && uvx ruff@0.17.1 check . && uvx ruff@0.17.1 format --check .   # ruff.toml at the repository root
 ```
 
 ## Scoped authorization and readiness

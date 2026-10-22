@@ -21,20 +21,19 @@ import hashlib
 import json
 import os
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from service_auth import AuthError, AuthPolicy, check_read_auth, is_loopback, readiness
-
 import yaml
-
 from _sentry import capture, init_sentry
+from service_auth import AuthError, AuthPolicy, check_read_auth, is_loopback, readiness
 
 init_sentry()
 
@@ -43,12 +42,18 @@ SERVICE_NAME = "solo-empire-accounts-api"
 SCHEMA_VERSION = "solo-empire.accounts.v1"
 MAX_QUERY_LENGTH = 80
 MAX_FILTER_LENGTH = 40
+# (groups, account rows, anonymous aggregate, source metadata) of one matrix revision
+Snapshot = tuple[
+    list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, Any]
+]
 
 
 class ApiError(Exception):
     """An expected client or service error with a safe public message."""
 
-    def __init__(self, status: int, message: str, *, code: str = "request_error") -> None:
+    def __init__(
+        self, status: int, message: str, *, code: str = "request_error"
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
@@ -62,7 +67,7 @@ class Response:
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def repository_root() -> Path:
@@ -72,7 +77,11 @@ def repository_root() -> Path:
 
 def default_matrix_path() -> Path:
     configured = os.environ.get("ACCOUNTS_API_MATRIX_PATH")
-    return Path(configured).expanduser() if configured else repository_root() / "accounts" / "ACCOUNT-MATRIX.yaml"
+    return (
+        Path(configured).expanduser()
+        if configured
+        else repository_root() / "accounts" / "ACCOUNT-MATRIX.yaml"
+    )
 
 
 def text(value: Any, max_length: int = 200) -> str:
@@ -86,7 +95,9 @@ def query_value(query: Mapping[str, list[str]], field: str, max_length: int) -> 
     return value
 
 
-def account_row(group: dict[str, Any], item: Mapping[str, Any], **overrides: Any) -> dict[str, Any]:
+def account_row(
+    group: dict[str, Any], item: Mapping[str, Any], **overrides: Any
+) -> dict[str, Any]:
     row = {
         "group_id": group["id"],
         "group_kind": group["kind"],
@@ -101,16 +112,20 @@ def account_row(group: dict[str, Any], item: Mapping[str, Any], **overrides: Any
     return row
 
 
-def project_matrix(matrix: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+def project_matrix(
+    matrix: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Return (groups, account rows, anonymous aggregate) from the raw matrix."""
     groups: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
 
     for layer in matrix.get("identity_layers") or []:
         group = {
-            "id": text(layer.get("id"), 60), "kind": "identity",
+            "id": text(layer.get("id"), 60),
+            "kind": "identity",
             "label": text(layer.get("display_name"), 80) or text(layer.get("id"), 60),
-            "description": text(layer.get("purpose")), "privacy": text(layer.get("privacy"), 40) or None,
+            "description": text(layer.get("purpose")),
+            "privacy": text(layer.get("privacy"), 40) or None,
             "face_visible": layer.get("face_visible"),
         }
         groups.append(group)
@@ -118,19 +133,34 @@ def project_matrix(matrix: Mapping[str, Any]) -> tuple[list[dict[str, Any]], lis
 
     for brand in matrix.get("faceless_brands") or []:
         group = {
-            "id": text(brand.get("id"), 60), "kind": "brand", "label": text(brand.get("id"), 60),
-            "description": text(brand.get("topic")), "privacy": "public", "face_visible": False,
+            "id": text(brand.get("id"), 60),
+            "kind": "brand",
+            "label": text(brand.get("id"), 60),
+            "description": text(brand.get("topic")),
+            "privacy": "public",
+            "face_visible": False,
         }
         groups.append(group)
-        for platform in brand.get("platforms") or []:
-            rows.append(account_row(group, brand, platform=text(platform, 40), name=group["id"], purpose=group["description"]))
+        rows.extend(
+            account_row(
+                group,
+                brand,
+                platform=text(platform, 40),
+                name=group["id"],
+                purpose=group["description"],
+            )
+            for platform in brand.get("platforms") or []
+        )
 
     existing = matrix.get("existing_platform_records") or []
     if existing:
         group = {
-            "id": "existing-records", "kind": "existing", "label": "Existing platform records",
+            "id": "existing-records",
+            "kind": "existing",
+            "label": "Existing platform records",
             "description": "Platform use found in other documents; confirm before relying on it.",
-            "privacy": None, "face_visible": None,
+            "privacy": None,
+            "face_visible": None,
         }
         groups.append(group)
         rows.extend(account_row(group, item) for item in existing)
@@ -138,34 +168,57 @@ def project_matrix(matrix: Mapping[str, Any]) -> tuple[list[dict[str, Any]], lis
     anonymous = matrix.get("anonymous_identities") or {}
     if "aggregate" in anonymous:
         aggregate = anonymous["aggregate"]
-        if (not isinstance(aggregate, dict) or
-                any(type(aggregate.get(field)) is not int or aggregate[field] < 0
-                    for field in ("identities", "platform_slots")) or
-                not isinstance(aggregate.get("by_status"), list) or
-                any(not isinstance(item, dict) or not isinstance(item.get("value"), str) or
-                    type(item.get("count")) is not int or item["count"] < 0 for item in aggregate["by_status"])):
+        if (
+            not isinstance(aggregate, dict)
+            or any(
+                type(aggregate.get(field)) is not int or aggregate[field] < 0
+                for field in ("identities", "platform_slots")
+            )
+            or not isinstance(aggregate.get("by_status"), list)
+            or any(
+                not isinstance(item, dict)
+                or not isinstance(item.get("value"), str)
+                or type(item.get("count")) is not int
+                or item["count"] < 0
+                for item in aggregate["by_status"]
+            )
+        ):
             raise ValueError("anonymous aggregate requires counts and status totals")
         anonymous_summary = {
             "isolation_required": bool(anonymous.get("isolation_required", True)),
-            "identities": aggregate["identities"], "platform_slots": aggregate["platform_slots"],
-            "by_status": [{"value": text(item["value"], 40) or "unknown", "count": item["count"]}
-                          for item in aggregate["by_status"]],
+            "identities": aggregate["identities"],
+            "platform_slots": aggregate["platform_slots"],
+            "by_status": [
+                {"value": text(item["value"], 40) or "unknown", "count": item["count"]}
+                for item in aggregate["by_status"]
+            ],
         }
     else:
         anonymous_accounts = anonymous.get("accounts") or []
         anonymous_summary = {
             "isolation_required": bool(anonymous.get("isolation_required", True)),
             "identities": len(anonymous_accounts),
-            "platform_slots": sum(len(item.get("platforms") or []) for item in anonymous_accounts),
-            "by_status": counts(text(item.get("status"), 40) or "unknown" for item in anonymous_accounts),
+            "platform_slots": sum(
+                len(item.get("platforms") or []) for item in anonymous_accounts
+            ),
+            "by_status": counts(
+                text(item.get("status"), 40) or "unknown" for item in anonymous_accounts
+            ),
         }
     for group in groups:
-        group["account_count"] = sum(1 for row in rows if row["group_id"] == group["id"])
+        group["account_count"] = sum(
+            1 for row in rows if row["group_id"] == group["id"]
+        )
     return groups, rows, anonymous_summary
 
 
 def counts(values: Any) -> list[dict[str, Any]]:
-    return [{"value": key, "count": count} for key, count in sorted(Counter(values).items(), key=lambda item: (-item[1], item[0]))]
+    return [
+        {"value": key, "count": count}
+        for key, count in sorted(
+            Counter(values).items(), key=lambda item: (-item[1], item[0])
+        )
+    ]
 
 
 class MatrixStore:
@@ -175,9 +228,9 @@ class MatrixStore:
         self.path = Path(path) if path else default_matrix_path()
         self._lock = RLock()
         self._mtime: float | None = None
-        self._snapshot: tuple[Any, ...] | None = None
+        self._snapshot: Snapshot | None = None
 
-    def snapshot(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    def snapshot(self) -> Snapshot:
         with self._lock:
             mtime = self.path.stat().st_mtime
             if self._snapshot is None or mtime != self._mtime:
@@ -196,11 +249,14 @@ class MatrixStore:
                         {"value": key, "description": text(value)}
                         for key, value in (raw.get("status_definitions") or {}).items()
                     ],
-                    "modified_at": datetime.fromtimestamp(mtime, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "modified_at": datetime.fromtimestamp(mtime, UTC)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
                 }
                 self._snapshot = (groups, rows, anonymous, metadata)
                 self._mtime = mtime
-            return self._snapshot  # type: ignore[return-value]
+            return self._snapshot
 
 
 class AccountsApi:
@@ -216,15 +272,34 @@ class AccountsApi:
         auth_policy: AuthPolicy | None = None,
     ) -> None:
         self.store = MatrixStore(matrix_path)
-        self.token = token if token is not None else os.environ.get("ACCOUNTS_API_TOKEN", "").strip()
-        self.environment = (environment or os.environ.get("ACCOUNTS_API_ENV", "development")).strip().lower()
-        self.auth_policy = auth_policy or AuthPolicy.from_env("ACCOUNTS_API_", "accounts-api", "accounts:read")
-        configured_origins = os.environ.get("ACCOUNTS_API_CORS_ORIGINS", "http://127.0.0.1:3600,http://localhost:3600")
-        self.allowed_origins = allowed_origins or tuple(item.strip() for item in configured_origins.split(",") if item.strip())
+        self.token = (
+            token
+            if token is not None
+            else os.environ.get("ACCOUNTS_API_TOKEN", "").strip()
+        )
+        self.environment = (
+            (environment or os.environ.get("ACCOUNTS_API_ENV", "development"))
+            .strip()
+            .lower()
+        )
+        self.auth_policy = auth_policy or AuthPolicy.from_env(
+            "ACCOUNTS_API_", "accounts-api", "accounts:read"
+        )
+        configured_origins = os.environ.get(
+            "ACCOUNTS_API_CORS_ORIGINS", "http://127.0.0.1:3600,http://localhost:3600"
+        )
+        self.allowed_origins = allowed_origins or tuple(
+            item.strip() for item in configured_origins.split(",") if item.strip()
+        )
 
     def _check_read_auth(self, headers: Mapping[str, str]) -> None:
         try:
-            check_read_auth(self.auth_policy, headers, environment=self.environment, token=self.token)
+            check_read_auth(
+                self.auth_policy,
+                headers,
+                environment=self.environment,
+                token=self.token,
+            )
         except AuthError as exc:
             raise ApiError(exc.status, exc.message, code=exc.code) from None
 
@@ -239,39 +314,62 @@ class AccountsApi:
         q = query_value(query, "q", MAX_QUERY_LENGTH).casefold()
         groups, rows, anonymous, metadata = self.store.snapshot()
         matched = [
-            row for row in rows
+            row
+            for row in rows
             if (not status or row["status"] == status)
             and (not platform or row["platform"] == platform)
             and (not kind or row["group_kind"] == kind)
-            and (not q or any(q in str(row[field] or "").casefold() for field in ("platform", "name", "purpose", "group_id")))
+            and (
+                not q
+                or any(
+                    q in str(row[field] or "").casefold()
+                    for field in ("platform", "name", "purpose", "group_id")
+                )
+            )
         ]
         matched_groups = {row["group_id"] for row in matched}
-        return Response(200, {
-            "schema_version": SCHEMA_VERSION,
-            "generated_at": utc_now(),
-            "source": metadata,
-            "summary": {
-                "accounts_total": len(rows),
-                "accounts_matched": len(matched),
-                "groups": len(groups),
-                "platforms": len({row["platform"] for row in rows}),
-                "active": sum(1 for row in rows if row["status"] == "active"),
-                "needs_attention": sum(1 for row in rows if row["status"] in {"needs-verification", "setup"}),
+        return Response(
+            200,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "generated_at": utc_now(),
+                "source": metadata,
+                "summary": {
+                    "accounts_total": len(rows),
+                    "accounts_matched": len(matched),
+                    "groups": len(groups),
+                    "platforms": len({row["platform"] for row in rows}),
+                    "active": sum(1 for row in rows if row["status"] == "active"),
+                    "needs_attention": sum(
+                        1
+                        for row in rows
+                        if row["status"] in {"needs-verification", "setup"}
+                    ),
+                },
+                "signals": {
+                    "statuses": counts(row["status"] for row in rows),
+                    "platforms": counts(row["platform"] for row in rows),
+                    "kinds": counts(row["group_kind"] for row in rows),
+                },
+                "anonymous": anonymous,
+                "filters": {
+                    "status": status,
+                    "platform": platform,
+                    "kind": kind,
+                    "q": q,
+                },
+                "groups": [group for group in groups if group["id"] in matched_groups],
+                "accounts": matched,
+                "boundary": "non-secret inventory; anonymous identities are counts only",
             },
-            "signals": {
-                "statuses": counts(row["status"] for row in rows),
-                "platforms": counts(row["platform"] for row in rows),
-                "kinds": counts(row["group_kind"] for row in rows),
-            },
-            "anonymous": anonymous,
-            "filters": {"status": status, "platform": platform, "kind": kind, "q": q},
-            "groups": [group for group in groups if group["id"] in matched_groups],
-            "accounts": matched,
-            "boundary": "non-secret inventory; anonymous identities are counts only",
-        })
+        )
 
-    def handle(self, method: str, target: str, *, headers: Mapping[str, str] | None = None) -> Response:
-        request_headers = {str(key).lower(): str(value) for key, value in (headers or {}).items()}
+    def handle(
+        self, method: str, target: str, *, headers: Mapping[str, str] | None = None
+    ) -> Response:
+        request_headers = {
+            str(key).lower(): str(value) for key, value in (headers or {}).items()
+        }
         parsed = urlsplit(target)
         path = parsed.path.rstrip("/") or "/"
         try:
@@ -280,37 +378,87 @@ class AccountsApi:
             if method == "GET" and path == "/ready":
                 return self._ready()
             if method == "GET" and path == "/health":
-                return Response(200, {"status": "ok", "service": SERVICE_NAME, "schema_version": SCHEMA_VERSION, "timestamp": utc_now()})
+                return Response(
+                    200,
+                    {
+                        "status": "ok",
+                        "service": SERVICE_NAME,
+                        "schema_version": SCHEMA_VERSION,
+                        "timestamp": utc_now(),
+                    },
+                )
             if path == "/api/v1/accounts":
                 self._check_read_auth(request_headers)
                 if method != "GET":
-                    raise ApiError(405, "account inventory is read-only", code="method_not_allowed")
+                    raise ApiError(
+                        405, "account inventory is read-only", code="method_not_allowed"
+                    )
                 return self._overview(parse_qs(parsed.query))
             raise ApiError(404, "route not found", code="not_found")
         except ApiError as exc:
-            return Response(exc.status, {"error": {"code": exc.code, "message": exc.message}})
+            return Response(
+                exc.status, {"error": {"code": exc.code, "message": exc.message}}
+            )
         except (OSError, ValueError, TypeError, yaml.YAMLError):
-            return Response(503, {"error": {"code": "matrix_unavailable", "message": "Account matrix could not be read"}})
-        except Exception as exc:
+            return Response(
+                503,
+                {
+                    "error": {
+                        "code": "matrix_unavailable",
+                        "message": "Account matrix could not be read",
+                    }
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - last-resort handler: report it and answer 500, never drop the request
             capture(exc)  # no-op unless SENTRY_DSN is set
-            return Response(500, {"error": {"code": "internal_error", "message": "Accounts service could not complete the request"}})
+            return Response(
+                500,
+                {
+                    "error": {
+                        "code": "internal_error",
+                        "message": "Accounts service could not complete the request",
+                    }
+                },
+            )
 
 
 class AccountsRequestHandler(BaseHTTPRequestHandler):
     api = AccountsApi()
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+    def log_message(self, format: str, *args: Any) -> None:
         return
 
     def _dispatch(self) -> None:
         origin = self.headers.get("Origin")
         if origin and origin not in self.api.allowed_origins:
-            self._write(Response(403, {"error": {"code": "origin_not_allowed", "message": "origin is not allowed"}}), origin=None)
+            self._write(
+                Response(
+                    403,
+                    {
+                        "error": {
+                            "code": "origin_not_allowed",
+                            "message": "origin is not allowed",
+                        }
+                    },
+                ),
+                origin=None,
+            )
             return
-        self._write(self.api.handle(self.command, self.path, headers=dict(self.headers.items())), origin=origin)
+        self._write(
+            self.api.handle(
+                self.command, self.path, headers=dict(self.headers.items())
+            ),
+            origin=origin,
+        )
 
     def _write(self, response: Response, *, origin: str | None) -> None:
-        encoded = b"" if response.status == HTTPStatus.NO_CONTENT else json.dumps(response.payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        encoded = (
+            b""
+            if response.status == HTTPStatus.NO_CONTENT
+            else json.dumps(
+                response.payload, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+        )
         self.send_response(response.status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -336,9 +484,21 @@ class AccountsRequestHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Solo Empire account matrix API")
-    parser.add_argument("--host", default=os.environ.get("ACCOUNTS_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("ACCOUNTS_API_PORT", os.environ.get("PORT", "3470"))))
-    parser.add_argument("--matrix", default=None, help="account matrix YAML; defaults to ACCOUNTS_API_MATRIX_PATH or accounts/ACCOUNT-MATRIX.yaml")
+    parser.add_argument(
+        "--host", default=os.environ.get("ACCOUNTS_API_HOST", "127.0.0.1")
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(
+            os.environ.get("ACCOUNTS_API_PORT", os.environ.get("PORT", "3470"))
+        ),
+    )
+    parser.add_argument(
+        "--matrix",
+        default=None,
+        help="account matrix YAML; defaults to ACCOUNTS_API_MATRIX_PATH or accounts/ACCOUNT-MATRIX.yaml",
+    )
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
@@ -347,7 +507,9 @@ def main() -> None:
     if not is_loopback(args.host):
         AccountsRequestHandler.api.environment = "production"
         if not AccountsRequestHandler.api.auth_policy.ready:
-            parser.error("a non-loopback --host requires valid ACCOUNTS_API_AUTH_* configuration")
+            parser.error(
+                "a non-loopback --host requires valid ACCOUNTS_API_AUTH_* configuration"
+            )
     server = ThreadingHTTPServer((args.host, args.port), AccountsRequestHandler)
     print(f"{SERVICE_NAME} running on http://{args.host}:{args.port}", flush=True)
     try:
@@ -359,4 +521,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

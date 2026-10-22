@@ -16,30 +16,31 @@ concurrency:
 
 jobs:
   accounts-api:
-    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@87dc5e1c7e0416886a6371d5a101bb2ccba38edd # v1.1.1
     with:
       # The image runs 3.13, but the tests' embedded PostgreSQL (pgserver, dev extra) only ships
       # wheels up to cp312. Move to 3.13 once pgserver does.
       python-version: "3.12"
-      # `ruff format` would rewrite 18 files (~3,400 changed lines): a separate follow-up.
-      # `ruff check` (ruff.toml) still runs.
-      format-check: false
+      # Ratchet: measured 60.98% on 2026-10-22 (threshold = measured - 2); raise it as tests grow.
+      coverage-threshold: "58"
 
   accounts-metadata-api:
-    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@87dc5e1c7e0416886a6371d5a101bb2ccba38edd # v1.1.1
     with:
       working-directory: services/accounts-metadata-api
       python-version: "3.12" # matches the python:3.12-slim image
-      # Same install as the Dockerfile: the vendored service-auth package, then the service.
-      install-command: uv pip install ./vendor/service-auth .
-      format-check: false # see accounts-api; ruff.toml applies to the whole repository
-      # The service's unittest suite (README), then the vendored service-auth suite.
+      # Install is auto: `uv sync --frozen --all-extras` from this folder's uv.lock (the vendored
+      # service-auth is a path source in it), the same lock the Dockerfile installs from.
+      # The service's unittest suite under coverage.py (it leaves .coverage for the gate), then the
+      # vendored service-auth suite, unmeasured: its code is covered in bookchaowalit/platform-auth-sdk.
       test-command: |
-        python -m unittest discover -s tests -v
+        python -m coverage run -m unittest discover -s tests -v
         (cd vendor/service-auth && python -m unittest discover -s tests -v)
+      # Ratchet: measured 80.62% on 2026-10-22 (threshold = measured - 2); raise it as tests grow.
+      coverage-threshold: "78"
 
   web:
-    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-node.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-node.yml@87dc5e1c7e0416886a6371d5a101bb2ccba38edd # v1.1.1
     with:
       working-directory: web
       node-version: "22"
@@ -48,4 +49,4 @@ jobs:
       build-command: npm run build
 
   security:
-    uses: bookchaowalit/platform-ci-workflows/.github/workflows/security.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/security.yml@87dc5e1c7e0416886a6371d5a101bb2ccba38edd # v1.1.1

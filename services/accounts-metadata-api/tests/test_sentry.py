@@ -81,10 +81,9 @@ class SentryTests(unittest.TestCase):
         text = (
             f"connect postgresql://app:{_PW}@db.example/app failed; "
             f"pass"
-            + "word="
-            + "dummy-value Authorization: Bearer "
-            + "abc.def-ghi "
-            + _JWT
+            "word="
+            "dummy-value Authorization: Bearer "
+            "abc.def-ghi " + _JWT
         )
         out = _sentry.scrub(text)
         for secret in (_PW, "dummy-value", "abc.def-ghi", _JWT):

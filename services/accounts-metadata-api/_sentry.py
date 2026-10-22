@@ -14,7 +14,10 @@ from __future__ import annotations
 import os
 import re
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
 
 # scheme://user:password@host -> scheme://user:***@host
 _URL_PASSWORD = re.compile(
@@ -35,7 +38,9 @@ def scrub(text: str) -> str:
     return _JWT.sub("***jwt***", text)
 
 
-def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+def _scrub_event(sentry_event: Event, _hint: Hint) -> Event:
+    # Scrubbed in place as a plain dict: the Event TypedDict is too strict for these edits.
+    event = cast("dict[str, Any]", sentry_event)
     for exc in (event.get("exception") or {}).get("values") or []:
         if isinstance(exc.get("value"), str):
             exc["value"] = scrub(exc["value"])
@@ -62,7 +67,7 @@ def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]
     trace = (event.get("contexts") or {}).get("trace")
     if isinstance(trace, dict):
         trace.pop("dynamic_sampling_context", None)
-    return event
+    return sentry_event
 
 
 def init_sentry() -> None:

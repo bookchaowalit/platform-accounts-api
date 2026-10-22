@@ -1,8 +1,22 @@
-# Ruff for platform-accounts-api (DevSecOps Phase 1). This repository starts on the classic core
-# rule set (pyflakes + pycodestyle errors). Ruff's wider default set (~37 findings, several of
-# which need behaviour review, e.g. FURB162 / BLE001 / B008) and `ruff format` (18 files,
-# ~3,400 changed lines) are a follow-up.
+# Ruff for the whole repository: the accounts cell (src/, tests/) and services/accounts-metadata-api
+# (its pyproject.toml has no [tool.ruff], so this file applies there too). Same rule set as the
+# other cells (finance-accounts-api [tool.ruff]); `ruff format` applies everywhere below except the vendored copy.
 target-version = "py312"
+# The vendored service-auth stays byte-identical to its canonical home, bookchaowalit/platform-auth-sdk
+# (README there: "update here, then re-copy"); lint and format it there, not in this copy.
+extend-exclude = ["services/accounts-metadata-api/vendor"]
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = [
+    "E", "W", "F", "I", "B", "BLE", "UP", "C4", "SIM", "RUF", "PIE", "PT", "RET", "ISC",
+    "PERF", "LOG", "G", "FURB",
+]
+# ruff format wraps code at 88; what stays longer are nosemgrep/noqa justifications, which
+# must sit on the flagged line.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# The contract suite is imported whole on purpose: its __all__ lists the tests to collect.
+"tests/test_contract.py" = ["F403"]
+# services/accounts-metadata-api runs on the standard library's unittest (no pytest in its image or CI).
+"services/accounts-metadata-api/tests/*" = ["PT009", "PT027"]
