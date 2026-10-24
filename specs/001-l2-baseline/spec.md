@@ -160,3 +160,10 @@ Big Loop Plan Wave 2 (solo-empire `repository-catalog/roadmaps/BIG-LOOP-PLAN-202
 |---|---|---|---|---|
 | Implemented (DoD) | Reviewer (checker) | Fresh Claude reviewer / 2026-10-22 | see Wave 2 report | CI run of the pushed tip |
 | Implemented (DoD) | Approver | Owner | pending | Wave 2 report |
+
+## Review (2026-10-24): changes requested
+
+Checker: independent Claude reviewer subagent (`solo:solo-reviewer`, Sonnet, read-only, no maker context). Status unchanged until fixed.
+
+- Tests run by the checker: .venv/bin/pytest -q: 97 passed, 18 skipped
+- Gap: All 9 ACs are tested, but §7 risk #1 (range rule may have left inverted rows) is template residue: no `ranges` in cell.yaml and §4 says no behaviour changed. Remove it.
