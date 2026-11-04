@@ -13,7 +13,7 @@ repo นี้คือ **Accounts cell**: `accounts-api` (FastAPI จาก `ce
 | 05 | C4 Context | done | [05-c4-context.md](05-c4-context.md) | README.md, PRODUCT.md, platform.py, .mcp.json, uptime targets.ts |
 | 06 | C4 Container | done | [06-c4-container.md](06-c4-container.md) | .railway/railway.ts, Dockerfiles, web/package.json, pyproject.toml, db/roles.sql |
 | 07 | C4 Component (accounts-api) | done | [07-c4-component.md](07-c4-component.md) | src/cellkit/*.py, src/solo_accounts/routes.py |
-| 08 | ADRs (6) | done | [08-adr/](08-adr/) | cell.yaml, migrations, cellkit, web/lib, railway.ts, cellkit-notes.md |
+| 08 | ADRs (7; ADR-0007 added 2026-11-04) | done | [08-adr/](08-adr/) | cell.yaml, migrations, cellkit, web/lib, railway.ts, cellkit-notes.md |
 | 09 | ERD | done | [09-erd.md](09-erd.md) | migrations/0001, 0002, cell.yaml |
 | 10 | Sequences (4) | done | [10-sequences.md](10-sequences.md) | actions.ts, crypto.ts, app.py, platform.py, routes.py, auth-routes.ts, metadata server.py |
 | 11 | State machines | done (enum values; API does not enforce transitions) | [11-state-machines.md](11-state-machines.md) | cell.yaml, migrations, routes.py |
@@ -37,6 +37,9 @@ repo นี้คือ **Accounts cell**: `accounts-api` (FastAPI จาก `ce
 - [ADR-0004](08-adr/ADR-0004-ciphertext-only-email-addresses.md) API/DB เห็นเฉพาะ ciphertext; ไม่เก็บ secret
 - [ADR-0005](08-adr/ADR-0005-railway-serverless-cd-from-main.md) Railway Serverless Singapore, CD จาก `main` หลัง CI
 - [ADR-0006](08-adr/ADR-0006-owner-only-web-on-vercel.md) Web owner-only บน Vercel ด้วย automation token ฝั่ง server
+- [ADR-0007](08-adr/ADR-0007-git-matrix-read-only-metadata-service.md) `ACCOUNT-MATRIX.yaml` ใน git เป็น canonical, serve ผ่าน metadata service read-only
+
+Architecture summary: [`DOCPACK/02-architecture.md`](../../DOCPACK/02-architecture.md)
 
 ## Related docs (reused, not copied)
 
