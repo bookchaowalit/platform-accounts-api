@@ -20,7 +20,7 @@ flowchart TD
   MAN["Manual: vercel deploy --prod in web/"] --> V["Vercel solo-accounts-web"]
 ```
 
-Sources: `.github/workflows/ci.yml`, `.railway/railway.ts`, `services/accounts-metadata-api/railway.toml`, `README.md` (Deploys, Web), `AGENTS.md`
+Sources: `.github/workflows/ci.yml`, `.railway/railway.ts`, `README.md` (Deploys, Web), `AGENTS.md`
 
 ## Open questions
 - รายละเอียด step ภายใน reusable workflow (ruff, mypy, scanners) อยู่ใน `platform-ci-workflows@87dc5e1` ไม่ได้อ่านใน pack นี้

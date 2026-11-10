@@ -33,7 +33,7 @@ flowchart TB
 | Web env | ดู `web/.env.example` (ไม่ได้อ่านใน pack นี้), `ACCOUNTS_API_URL`, `ACCOUNTS_API_TOKEN`, `ACCOUNTS_WEB_FIELD_KEY`, `ACCOUNTS_WEB_OWNER_SUBJECTS`, `ACCOUNTS_WEB_SESSION_GENERATION` | `web/lib/api.ts`, `web/lib/crypto.ts`, `web/lib/auth.ts`, README |
 | Custom domains | none found in repo | — |
 
-Sources: `.railway/railway.ts`, `Dockerfile`, `services/accounts-metadata-api/Dockerfile`, `services/accounts-metadata-api/railway.toml`, `README.md`, `PRODUCT.md`, `web/vercel.json`, `web/package.json`, `web/lib/*.ts`, Railway API (project `platform-accounts-api`, 2026-11-04)
+Sources: `.railway/railway.ts`, `Dockerfile`, `services/accounts-metadata-api/Dockerfile`, `README.md`, `PRODUCT.md`, `web/vercel.json`, `web/package.json`, `web/lib/*.ts`, Railway API (project `platform-accounts-api`, 2026-11-04)
 
 ## Open questions
 - `services/accounts-metadata-api/service.yaml` บอก `deploy.target: unassigned` ขัดกับ Railway ที่ deploy อยู่ — ควรอัปเดต
