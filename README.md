@@ -1,7 +1,7 @@
 # platform-accounts-api
 The Accounts cell: its own API (Railway, serverless) and its own Neon
-database, described by `cell.yaml` and served by the code in `src/cellkit/`, which
-this repository owns. It
+database, described by `cell.yaml` and served by the pinned [platform-cellkit](https://github.com/bookchaowalit/platform-cellkit)
+package; this repository owns `cell.yaml` and its migrations. It
 reuses empire-platform for identity, authorization, executions and audit over
 HTTP with the caller's token.
 
@@ -30,7 +30,7 @@ workspace by forced row-level security).
 ## API
 
 Every resource has list, stats, get, get-by-legacy-id, create, patch and delete
-(see `cellkit/app.py`). Permissions are `accounts.<resource>:read|write|delete`.
+(see `cellkit/app.py` in [platform-cellkit](https://github.com/bookchaowalit/platform-cellkit)). Permissions are `accounts.<resource>:read|write|delete`.
 
 | Path | Resource | Filters |
 |---|---|---|
@@ -85,5 +85,5 @@ deployment. Roll back by redeploying an earlier deployment in Railway. `railway 
 longer used.
 
 Railway variables: `SENTRY_DSN` (error reporting; unset = off, see
-`src/cellkit/_sentry.py`), `ACCOUNTS_DB_MODE=hosted`, `ACCOUNTS_DB_URL_API`,
+`cellkit/_sentry.py` in platform-cellkit), `ACCOUNTS_DB_MODE=hosted`, `ACCOUNTS_DB_URL_API`,
 `ACCOUNTS_JWT_PUBLIC_KEY_PEM`, `ACCOUNTS_JWT_ISSUER`, `EMPIRE_PLATFORM_URL`.
