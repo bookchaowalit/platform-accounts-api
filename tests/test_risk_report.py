@@ -3,6 +3,7 @@
 from datetime import date
 
 from cellkit.testing import ISSUER  # noqa: F401  (fixtures come from conftest)
+
 from solo_accounts.routes import analyse
 
 TODAY = date(2026, 10, 10)

@@ -9,10 +9,9 @@ addresses: mailboxes are named by their ``address_hint``.
 from datetime import date, timedelta
 from typing import Annotated, Any, get_args
 
-from fastapi import HTTPException
-
 from cellkit.app import Context
 from cellkit.auth import Principal
+from fastapi import HTTPException
 
 Row = dict[str, Any]  # one database row (psycopg dict_row) or one finding
 
