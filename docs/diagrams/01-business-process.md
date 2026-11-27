@@ -2,6 +2,8 @@
 
 ระบบนี้คือ **Accounts cell**: inventory ของ identity, mailbox, platform account และ domain ของ owner พร้อม trust zone, recovery chain และ MFA posture เพื่อให้เห็นความเสี่ยง (เสีย mailbox เดียวแล้วเสียหลายบัญชี, domain หมดอายุ, brand ที่แยกไว้ถูกโยงกลับมาหา owner) ก่อนเกิดเหตุจริง ผ่าน `GET /v1/risk-report` ระบบ **ไม่เก็บ secret** (password, recovery code, TOTP seed) และ **ไม่เห็น email แบบ plaintext** เลย
 
+Last reviewed: 2026-11-27 · commit `b117a35`
+
 ## As-Is (จาก code วันนี้)
 
 ```mermaid
@@ -30,7 +32,7 @@ Sources: `README.md`, `PRODUCT.md`, `cell.yaml`, `src/solo_accounts/routes.py`, 
 3. **ประเมินความเสี่ยง**: risk report 13 finding codes (ดู `README.md`) เป้าหมายใน `PRODUCT.md` คือ "ไม่มี `high` finding ที่ไม่มีคำอธิบาย"
 4. **ระบบเดิม (matrix)**: `accounts/` folder + `ACCOUNT-MATRIX.yaml` ยังถูก serve read-only ผ่าน `accounts-metadata-api`
 
-## To-Be
+## To-Be (จาก PRODUCT.md และ README.md)
 
 จาก `PRODUCT.md` (ไม่มี `docs/UPGRADE-PLAN.md` หรือ spec ที่เป็น feature ใหม่; `specs/001-l2-baseline` เป็น tooling/test baseline):
 - "built to become a multi-tenant SaaS" — OIDC ผ่าน IdP อื่น เช่น Clerk สำหรับ multi-tenant (`README.md` §Web)
@@ -44,7 +46,16 @@ flowchart LR
 
 Sources: `PRODUCT.md`, `README.md`, `web/lib/auth.ts`, `migrations/0001_accounts.sql`
 
+## Gap
+
+| ID | As-Is → To-Be | Status | Owner | Evidence |
+|---|---|---|---|---|
+| G1 | tenant เดียว (`ACCOUNTS_WEB_OWNER_SUBJECTS` มี 1 entry) → multi-tenant SaaS ผ่าน IdP อื่น เช่น Clerk | decide | owner | `README.md` §Web, `web/lib/auth.ts`; ไม่มี timeline หรือ IdP ที่เลือกใน repo |
+| G2 | measures (high findings, `review_overdue`, weak MFA, 5xx/p95) ไม่มี dashboard → มี dashboard | todo | claude | `PRODUCT.md` §Measures [ต้องยืนยัน: no dashboard records these yet] |
+| G3 | `accounts-metadata-api` ยังอ่าน `ACCOUNT-MATRIX.yaml` คู่กับ `accounts-api` → matrix ถูกแทนที่ทั้งหมด | decide | owner | `PRODUCT.md` §Users: ยังไม่ยืนยันว่า Solo Web เรียก `accounts-metadata-api` อยู่ |
+| G4 | web ยังไม่ตั้ง Google OIDC client id/secret → sign-in ผ่าน OIDC ใช้ได้ | todo | owner | `PRODUCT.md` §Operating Context [ต้องยืนยัน] |
+
 ## Open questions
-- Solo Web (`life-dashboard-web`) ยังเรียก `accounts-metadata-api` อยู่หรือไม่ หลัง `accounts-api` มาแทน matrix (`PRODUCT.md` [ต้องยืนยัน])
-- แผน multi-tenant: timeline และ IdP ที่เลือก ไม่มีใน repo
-- Google OIDC client id/secret ของ web ยังไม่ตั้ง (`PRODUCT.md` [ต้องยืนยัน])
+- Solo Web (`life-dashboard-web`) ยังเรียก `accounts-metadata-api` อยู่หรือไม่ หลัง `accounts-api` มาแทน matrix (G3, `PRODUCT.md` [ต้องยืนยัน])
+- แผน multi-tenant (G1): timeline และ IdP ที่เลือก ไม่มีใน repo
+- Google OIDC client id/secret ของ web ยังไม่ตั้ง (G4, `PRODUCT.md` [ต้องยืนยัน])
